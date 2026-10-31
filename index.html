@@ -16347,6 +16347,7 @@ html.bbb-phone #bbbCustomThemeModal :is(#bbbCustomName,#bbbCustomFont) {font-siz
   const ACCOUNT_PROMPT_SEEN='bloomByBit_accountPromptSeen_v1';
   const CLOUD_THEME_IMAGE_KEY='bloomByBit_cloudThemeImage_v1';
   const RESET_REQUEST_KEY='bloomByBit_passwordResetRequested_v1';
+  const RECOVERY_GUEST_SNAPSHOT_KEY='bloomByBit_recoveryGuestSnapshot_v1';
   const $=id=>document.getElementById(id);
   const app=()=>window.BloomByBitApp;
   const notify=msg=>{if(app()?.toast)app().toast(msg);else console.info(msg)};
@@ -16400,6 +16401,36 @@ html.bbb-phone #bbbCustomThemeModal :is(#bbbCustomName,#bbbCustomFont) {font-siz
   function markPromptSeen(){try{localStorage.setItem(ACCOUNT_PROMPT_SEEN,'1')}catch(_){}}
   function promptWasSeen(){try{return localStorage.getItem(ACCOUNT_PROMPT_SEEN)==='1'}catch(_){return true}}
 
+  function captureRecoveryGuestSnapshot(){
+    try{
+      const existing=safeJSON(localStorage.getItem(RECOVERY_GUEST_SNAPSHOT_KEY),null);
+      if(existing?.capturedAt&&Date.now()-Number(existing.capturedAt)<2*60*60*1000)return;
+      localStorage.setItem(RECOVERY_GUEST_SNAPSHOT_KEY,JSON.stringify({
+        capturedAt:Date.now(),
+        state:localStorage.getItem('betterYou_v1'),
+        tutorialSeen:localStorage.getItem('bloomByBit_tutorialSeen')
+      }));
+    }catch(_){ }
+  }
+  function restoreRecoveryGuestSnapshot(){
+    const snap=safeJSON(localStorage.getItem(RECOVERY_GUEST_SNAPSHOT_KEY),null);
+    try{
+      if(snap){
+        if(snap.state==null)localStorage.removeItem('betterYou_v1');else localStorage.setItem('betterYou_v1',snap.state);
+        if(snap.tutorialSeen==null)localStorage.removeItem('bloomByBit_tutorialSeen');else localStorage.setItem('bloomByBit_tutorialSeen',snap.tutorialSeen);
+        const nextState=safeJSON(snap.state,null);
+        if(nextState&&app()?.setState)app().setState(clone(nextState));
+      }
+      localStorage.removeItem(RECOVERY_GUEST_SNAPSHOT_KEY);
+    }catch(_){ }
+  }
+  function clearStaleRecoverySnapshot(){
+    try{
+      const snap=safeJSON(localStorage.getItem(RECOVERY_GUEST_SNAPSHOT_KEY),null);
+      if(!snap?.capturedAt||Date.now()-Number(snap.capturedAt)>2*60*60*1000)localStorage.removeItem(RECOVERY_GUEST_SNAPSHOT_KEY);
+    }catch(_){ }
+  }
+
   function renderPresetInto(el,id='sprout'){
     if(!el)return;
     el.innerHTML=ICONS[id]||defaultIcon;
@@ -16426,7 +16457,7 @@ html.bbb-phone #bbbCustomThemeModal :is(#bbbCustomName,#bbbCustomFont) {font-siz
   }
 
   function renderAccountUI(){
-    const logged=!!currentUser;
+    const logged=!!currentUser&&!passwordRecoveryMode;
     const guest=$('bbbSettingsAccountGuest'),user=$('bbbSettingsAccountUser');
     if(guest)guest.hidden=logged;
     if(user)user.hidden=!logged;
@@ -16629,6 +16660,7 @@ html.bbb-phone #bbbCustomThemeModal :is(#bbbCustomName,#bbbCustomFont) {font-siz
 
   async function syncNow(options={}){
     if(!supabaseClient||!currentUser)return {skipped:true};
+    if(passwordRecoveryMode&&!options.allowDuringPasswordRecovery)return {skipped:true,passwordRecovery:true};
     if(accountEntryInProgress&&!options.allowDuringAccountEntry)return {skipped:true,accountEntry:true};
     if(syncInFlight)return syncInFlight;
     const payload=collectPayload(options);
@@ -16657,7 +16689,7 @@ html.bbb-phone #bbbCustomThemeModal :is(#bbbCustomName,#bbbCustomFont) {font-siz
     return syncInFlight;
   }
   function scheduleSync(delay=900){
-    if(!currentUser||accountEntryInProgress)return;
+    if(!currentUser||accountEntryInProgress||passwordRecoveryMode)return;
     clearTimeout(syncTimer);
     syncTimer=setTimeout(()=>syncNow(),delay);
   }
@@ -16701,6 +16733,7 @@ html.bbb-phone #bbbCustomThemeModal :is(#bbbCustomName,#bbbCustomFont) {font-siz
 
   async function loadProfile(){
     currentProfile=null;currentSignedAvatarUrl='';
+    if(passwordRecoveryMode){renderAccountUI();return null}
     if(!supabaseClient||!currentUser){renderAccountUI();return null}
     profileLoading=true;
     try{
@@ -16806,7 +16839,12 @@ html.bbb-phone #bbbCustomThemeModal :is(#bbbCustomName,#bbbCustomFont) {font-siz
     window.BBBSupabase=supabaseClient;
     supabaseClient.auth.onAuthStateChange((event,session)=>{
       if(event==='PASSWORD_RECOVERY'){
-        passwordRecoveryMode=true;currentUser=session?.user||currentUser;
+        captureRecoveryGuestSnapshot();
+        passwordRecoveryMode=true;accountEntryInProgress=true;
+        currentUser=session?.user||currentUser;currentProfile=null;currentSignedAvatarUrl='';
+        clearTimeout(syncTimer);
+        setSyncStatus('idle','Password recovery · your Bloom progress is untouched');
+        renderAccountUI();
         setTimeout(openPasswordUpdate,0);
         return;
       }
@@ -16819,8 +16857,13 @@ html.bbb-phone #bbbCustomThemeModal :is(#bbbCustomName,#bbbCustomFont) {font-siz
     const {data}=await supabaseClient.auth.getSession();
     currentUser=data?.session?.user||null;
     if(passwordRecoveryMode&&currentUser){
-      await loadProfile();renderAccountUI();setTimeout(openPasswordUpdate,60);return;
+      captureRecoveryGuestSnapshot();
+      accountEntryInProgress=true;currentProfile=null;currentSignedAvatarUrl='';
+      clearTimeout(syncTimer);
+      setSyncStatus('idle','Password recovery · your Bloom progress is untouched');
+      renderAccountUI();setTimeout(openPasswordUpdate,60);return;
     }
+    clearStaleRecoverySnapshot();
     if(!currentUser){
       if(localStorage.getItem(CLOUD_USER_KEY)){
         restoreGuestSnapshot();
@@ -16970,6 +17013,7 @@ html.bbb-phone #bbbCustomThemeModal :is(#bbbCustomName,#bbbCustomFont) {font-siz
   function closeResetRequest(){setModalOpen($('bbbResetRequestModal'),false);setError('bbbResetRequestError','')}
   async function sendPasswordReset(email){
     if(!supabaseClient)throw new Error('Account service is unavailable right now.');
+    try{localStorage.removeItem(RECOVERY_GUEST_SNAPSHOT_KEY)}catch(_){}
     const redirectUrl=authEmailRedirectUrl();
     const options=redirectUrl?{redirectTo:redirectUrl}:{};
     const {error}=await supabaseClient.auth.resetPasswordForEmail(normalizeEmail(email),options);
@@ -16991,12 +17035,14 @@ html.bbb-phone #bbbCustomThemeModal :is(#bbbCustomName,#bbbCustomFont) {font-siz
   }
   async function leavePasswordRecovery({openLogin=true}={}){
     setModalOpen($('bbbPasswordUpdateModal'),false);
+    clearTimeout(syncTimer);
     if(supabaseClient){
       logoutInProgress=true;
       try{await supabaseClient.auth.signOut({scope:'local'})}catch(_){}
       logoutInProgress=false;
     }
-    currentUser=null;currentProfile=null;currentSignedAvatarUrl='';passwordRecoveryMode=false;accountEntryInProgress=false;
+    currentUser=null;currentProfile=null;currentSignedAvatarUrl='';passwordRecoveryMode=false;accountEntryInProgress=false;lastPayloadHash='';
+    restoreRecoveryGuestSnapshot();
     try{localStorage.removeItem(RESET_REQUEST_KEY)}catch(_){}
     clearRecoveryUrl();renderAccountUI();
     if(openLogin){openAuth('login');}
@@ -17068,6 +17114,7 @@ html.bbb-phone #bbbCustomThemeModal :is(#bbbCustomName,#bbbCustomFont) {font-siz
     else renderPresetInto($('bbbProfilePreview'),AVATAR_IDS.includes(selectedAvatar)?selectedAvatar:'sprout');
   }
   async function openProfileEditor({setup=false}={}){
+    if(passwordRecoveryMode)return;
     if(!currentUser){openAuth('create');return}
     setModalOpen($('settingsModal'),false);setModalOpen($('bbbAuthModal'),false);clearUploadPreview();setError('bbbProfileError','');
     if(!currentProfile&&!profileLoading)await loadProfile();
@@ -17257,8 +17304,8 @@ html.bbb-phone #bbbCustomThemeModal :is(#bbbCustomName,#bbbCustomFont) {font-siz
     });
     window.addEventListener('bbb:data-changed',()=>scheduleSync());
     window.addEventListener('online',()=>scheduleSync(100));
-    document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='hidden')syncNow()});
-    setInterval(()=>{if(currentUser)scheduleSync(100)},6000);
+    document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='hidden'&&!passwordRecoveryMode)syncNow()});
+    setInterval(()=>{if(currentUser&&!passwordRecoveryMode)scheduleSync(100)},6000);
     window.addEventListener('bloomsettingsopen',renderAccountUI);
   }
 
