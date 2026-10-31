@@ -12510,7 +12510,7 @@ body[data-theme="fantasy"] #bloomHelpPanel,body[data-theme="cottage"] #bloomHelp
     ]},
     calendar:{label:'Task Calendar',intro:'The calendar keeps tasks, dates, optional times, and daily progress together in one place.',items:[
       ['calendar-views','How do Month and Week work?','Use Month for the big picture and Week for a closer look at seven days. Today is marked in both views. The arrows move one month or one week at a time, and Today brings you back to the current date. Click anywhere inside a day box to select it.'],
-      ['calendar-minimize','Can I make the calendar smaller?','Yes. Use <b>Minimize calendar</b> to hide the Month/Week calendar while keeping Today’s tasks, Add Task, and Unscheduled visible. The button changes to <b>View calendar</b> when the calendar is minimized, and Bloom remembers your choice. The small Date picker inside a task stays separate and will not reopen the large calendar.'],
+      ['calendar-minimize','Can I make the calendar smaller?','Yes. Click <b>Minimize calendar</b> to hide the Month/Week calendar while keeping your tasks visible. Click <b>View calendar</b> whenever you want to open it again. Bloom remembers your choice.'],
       ['calendar-add','How do I add a task?','Select a day and enter the task. The due date is optional: choose <b>No due date</b> in the Date picker to place the task in Unscheduled at the bottom of the calendar. If you use a due date, time is optional, and the Time picker also lets you mark the task as All-day.'],
       ['calendar-edit','How do I edit or delete a task?','Select the task’s day, then click the three-line button on the right side of the task. Choose Edit or Delete. Delete always asks you to confirm before the task is removed. Tasks shown inside the calendar itself are display-only. If a day shows +more, open it to see every task.'],
       ['calendar-order','How do I rearrange tasks?','When Settings → Habits & Tasks → Order each day by due time is off, press and hold the three-line button on the right side of a task, then drag it to a new position. When automatic due-time sorting is on, Bloom by Bit keeps the order automatically, so manual rearranging is disabled.'],
@@ -16105,7 +16105,6 @@ html.bbb-phone #bbbCustomThemeModal :is(#bbbCustomName,#bbbCustomFont) {font-siz
 .bbb-link-button:hover,.bbb-link-button:focus-visible{opacity:.76;outline:none!important}
 .bbb-reset-actions{display:flex;justify-content:flex-end;gap:8px;flex-wrap:wrap;margin-top:4px}
 .bbb-reset-actions .secondary{background:var(--surface-soft)!important;color:var(--text)!important;-webkit-text-fill-color:var(--text)!important;border:1px solid var(--edge)!important}
-.bbb-reset-note{margin:0!important;font-family:var(--theme-ui,system-ui)!important;font-size:11px!important;line-height:1.45!important;color:var(--muted)!important}
 .bbb-account-warning{padding:12px 13px;border:1px solid var(--edge);border-radius:12px;background:var(--surface-soft);font-family:var(--theme-ui,system-ui);font-size:12px;line-height:1.5;color:var(--muted)}
 .bbb-account-warning strong{color:var(--text)}
 
@@ -16242,7 +16241,6 @@ html.bbb-phone #bbbCustomThemeModal :is(#bbbCustomName,#bbbCustomFont) {font-siz
     <p class="bbb-account-lede">Enter the email you use for Bloom and we’ll send a reset link.</p>
     <form class="bbb-account-form" id="bbbResetRequestForm">
       <label>Email<input id="bbbResetEmail" type="email" autocomplete="email" required placeholder="you@example.com"></label>
-      <p class="bbb-reset-note">For privacy, Bloom won’t say whether an account exists for that email.</p>
       <div class="bbb-account-error" id="bbbResetRequestError" role="alert"></div>
       <div class="bbb-reset-actions">
         <button type="button" class="secondary" id="bbbResetRequestCancel">Cancel</button>
