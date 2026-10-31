@@ -16530,11 +16530,19 @@ html.bbb-phone #bbbCustomThemeModal :is(#bbbCustomName,#bbbCustomFont) {font-siz
     if(!stateValue||typeof stateValue!=='object')return null;
     return {version:1,state:stateValue,tutorialSeen:snap?.tutorialSeen==='1'};
   }
-  function guestHasMeaningfulProgress(payload){
-    const st=payload?.state;if(!st||typeof st!=='object')return false;
+  function recognizableBloomState(st){
+    if(!st||typeof st!=='object'||Array.isArray(st))return false;
+    return ['habits','dailyTasks','laterTasks','calendarArchive','history','pulls','theme','name','prizes'].some(key=>Object.prototype.hasOwnProperty.call(st,key));
+  }
+  function stateHasMeaningfulProgress(st){
+    if(!recognizableBloomState(st))return false;
     const habits=Array.isArray(st.habits)?st.habits:[];
-    const defaultHabit=habits.length===1&&String(habits[0]?.name||'')==='What do you want to work on?'&&Number(habits[0]?.goal||0)===7;
-    if(!defaultHabit)return true;
+    const customHabits=habits.some(h=>{
+      const name=String(h?.name||'').trim();
+      const goal=Math.max(0,Number(h?.goal||0));
+      return !!name&&(name!=='What do you want to work on?'||goal!==7);
+    });
+    if(customHabits)return true;
     if(String(st.name||'You')!=='You')return true;
     if(String(st.theme||'fantasy')!=='fantasy'||st.customTheme)return true;
     if((st.pulls||[]).length||(st.history||[]).length||(st.calendarArchive||[]).length||(st.laterTasks||[]).length||(st.pendingRewards||[]).length)return true;
@@ -16544,10 +16552,12 @@ html.bbb-phone #bbbCustomThemeModal :is(#bbbCustomName,#bbbCustomFont) {font-siz
     if(Number(st.pomodoroFocusMinutes??25)!==25||Number(st.pomodoroShortBreakMinutes??5)!==5||Number(st.pomodoroLongBreakMinutes??15)!==15||Number(st.pomodoroRounds??4)!==4||Number(st.focusTimerMinutes??45)!==45)return true;
     if(String(st.calendarTaskColor||'#D6D7D9').toUpperCase()!=='#D6D7D9')return true;
     const prizes=st.prizes||{};
-    const defaults={small:['Iced coffee or tea','One guilt-free episode','Favorite snack'],medium:['Boba or coffee run','$5 fun money','One hour guilt-free gaming'],large:['$10 fun money','Meal I have been craving','Small accessory or book']};
-    if(payloadString(prizes)!==payloadString(defaults))return true;
+    const defaultPrizes={small:['Iced coffee or tea','One guilt-free episode','Favorite snack'],medium:['Boba or coffee run','$5 fun money','One hour guilt-free gaming'],large:['$10 fun money','Meal I have been craving','Small accessory or book']};
+    if(Object.keys(prizes).length&&payloadString(prizes)!==payloadString(defaultPrizes))return true;
     return false;
   }
+  function guestHasMeaningfulProgress(payload){return stateHasMeaningfulProgress(payload?.state)}
+  function cloudHasMeaningfulProgress(payload){return stateHasMeaningfulProgress(payload?.state)}
   function guestAndCloudDiffer(guestPayload,cloudPayload){
     return payloadString(guestPayload?.state||{})!==payloadString(cloudPayload?.state||{});
   }
@@ -16566,8 +16576,23 @@ html.bbb-phone #bbbCustomThemeModal :is(#bbbCustomName,#bbbCustomFont) {font-siz
       return true;
     }catch(_){return false}
   }
-  function requestProgressChoice(){
+  function requestProgressChoice({cloudEmpty=false}={}){
     setError('bbbProgressChoiceError','');
+    const title=$('bbbProgressChoiceTitle');
+    const lede=$('bbbProgressChoiceModal')?.querySelector('.bbb-account-lede');
+    const accountButton=$('bbbUseAccountProgress');
+    const accountCopy=accountButton?.closest('.bbb-progress-choice-option')?.querySelector('span');
+    if(cloudEmpty){
+      if(title)title.textContent='Your account copy looks empty';
+      if(lede)lede.textContent='Bloom found progress on this device, but the saved account copy appears empty. Choose carefully so nothing gets replaced by surprise.';
+      if(accountButton)accountButton.textContent='Use empty account anyway';
+      if(accountCopy)accountCopy.textContent='Loads the empty/default account copy. Your device guest copy stays safe for when you log out.';
+    }else{
+      if(title)title.textContent='We found progress on this device';
+      if(lede)lede.textContent='This browser and your account both have Bloom progress. Choose which one you want to continue with.';
+      if(accountButton)accountButton.textContent='Use my account progress';
+      if(accountCopy)accountCopy.textContent='Loads the progress already saved to your account. This device’s guest copy stays safe for when you log out.';
+    }
     setModalOpen($('bbbProgressChoiceModal'),true);
     return new Promise(resolve=>{progressChoiceResolver=resolve});
   }
@@ -16577,14 +16602,20 @@ html.bbb-phone #bbbCustomThemeModal :is(#bbbCustomName,#bbbCustomFont) {font-siz
     if(resolve)resolve(choice);
   }
   function applyCloudPayload(payload){
-    if(!payload||typeof payload!=='object'||!payload.state)return false;
+    if(!payload||typeof payload!=='object'||!recognizableBloomState(payload.state))return false;
     try{
-      const nextState=clone(payload.state);
-      // Replace both the persisted copy and the live in-memory app state. If only
-      // localStorage changes, a late save from the guest dashboard can overwrite it
-      // again before the reload completes.
+      const rawState=clone(payload.state);
+      const base=app()?.getDefaults?.()||{};
+      const nextState={
+        ...clone(base),
+        ...rawState,
+        prizes:{...(base.prizes||{}),...(rawState.prizes||{})},
+        dailyTasks:{...(base.dailyTasks||{}),...(rawState.dailyTasks||{})}
+      };
+      // Install a complete live state before reloading so a partial/older cloud
+      // payload cannot temporarily leave Bloom with missing core fields.
       localStorage.setItem('betterYou_v1',JSON.stringify(nextState));
-      if(app()?.setState)app().setState(nextState);
+      if(app()?.setState)app().setState(clone(nextState));
       if(payload.tutorialSeen)localStorage.setItem('bloomByBit_tutorialSeen','1');
       else localStorage.removeItem('bloomByBit_tutorialSeen');
       return true;
@@ -16689,7 +16720,8 @@ html.bbb-phone #bbbCustomThemeModal :is(#bbbCustomName,#bbbCustomFont) {font-siz
   async function resolveGuestCloudConflictIfNeeded(row){
     const guestPayload=guestSnapshotPayload();
     if(!row?.payload?.state||!guestHasMeaningfulProgress(guestPayload)||!guestAndCloudDiffer(guestPayload,row.payload))return {handled:false};
-    const choice=await requestProgressChoice();
+    const cloudEmpty=!cloudHasMeaningfulProgress(row.payload);
+    const choice=await requestProgressChoice({cloudEmpty});
     if(choice==='cancel'){
       logoutInProgress=true;
       try{await supabaseClient.auth.signOut({scope:'local'})}finally{logoutInProgress=false}
@@ -16703,7 +16735,8 @@ html.bbb-phone #bbbCustomThemeModal :is(#bbbCustomName,#bbbCustomFont) {font-siz
       // Re-read the row at the moment the user chooses the account copy. This makes
       // the choice authoritative even if the first row was fetched a few moments ago.
       const freshRow=await fetchCloudRow();
-      if(!freshRow?.payload?.state)throw new Error('No saved account progress was found.');
+      if(!freshRow?.payload?.state||!recognizableBloomState(freshRow.payload.state))throw new Error('No usable saved account progress was found.');
+      if(!cloudHasMeaningfulProgress(freshRow.payload)&&cloudHasMeaningfulProgress(row?.payload))throw new Error('The account copy changed while you were choosing. Please try again.');
       await hydrateCloudThemeImage(freshRow.payload);
       if(!applyCloudPayload(freshRow.payload))throw new Error('Could not load your account progress.');
       if(freshRow.updated_at)localStorage.setItem(CLOUD_UPDATED_KEY,freshRow.updated_at);
