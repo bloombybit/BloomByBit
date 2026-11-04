@@ -16392,6 +16392,25 @@ html.bbb-phone #bbbCustomThemeModal :is(#bbbCustomName,#bbbCustomFont) {font-siz
 .bbb-progress-choice-option button{width:100%;min-height:42px;font-family:var(--theme-ui,system-ui)!important}
 .bbb-progress-choice-option span{font-family:var(--theme-ui,system-ui);font-size:11px;line-height:1.45;color:var(--muted)}
 .bbb-progress-choice-option.device{border-color:color-mix(in srgb,var(--button) 45%,var(--edge))}
+/* Keep the two progress-choice buttons readable in every built-in world.
+   Custom themes intentionally keep the user's literal color choices. */
+body:is([data-theme="fantasy"],[data-theme="celestial"],[data-theme="cottage"],[data-theme="nocturne"],[data-theme="tidal"],[data-theme="orbital"],[data-theme="skybound"],[data-theme="garage"],[data-theme="dragon"],[data-theme="cove"]) #bbbUseAccountProgress{
+  background:var(--button)!important;
+  color:var(--button-text)!important;
+  -webkit-text-fill-color:var(--button-text)!important;
+  border-color:color-mix(in srgb,var(--button) 70%,#000)!important;
+}
+body:is([data-theme="fantasy"],[data-theme="celestial"],[data-theme="cottage"],[data-theme="nocturne"],[data-theme="tidal"],[data-theme="orbital"],[data-theme="skybound"],[data-theme="garage"],[data-theme="dragon"],[data-theme="cove"]) #bbbUseDeviceProgress{
+  background:var(--surface-strong)!important;
+  color:var(--text)!important;
+  -webkit-text-fill-color:var(--text)!important;
+  border-color:var(--edge)!important;
+  box-shadow:none!important;
+}
+body:is([data-theme="fantasy"],[data-theme="celestial"],[data-theme="cottage"],[data-theme="nocturne"],[data-theme="tidal"],[data-theme="orbital"],[data-theme="skybound"],[data-theme="garage"],[data-theme="dragon"],[data-theme="cove"]) #bbbUseDeviceProgress:is(:hover,:focus-visible){
+  outline:2px solid color-mix(in srgb,var(--button) 62%,transparent);
+  outline-offset:2px;
+}
 .bbb-progress-choice-cancel{display:flex;justify-content:flex-end}
 .bbb-progress-choice-cancel button{min-width:96px;background:var(--surface-soft)!important;color:var(--text)!important;-webkit-text-fill-color:var(--text)!important;border:1px solid var(--edge)!important}
 .bbb-account-prompt-modal{max-width:470px!important;text-align:center}
